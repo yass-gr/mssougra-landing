@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSSOUGRA // PREDICTIVE_ENGINE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --fg: #33ff00;
+      --fg-dim: #1f521f;
+      --amber: #ffb000;
+      --red: #ff3333;
+      --text: #d0ffd0;
+      --text-dim: #558855;
+      --border: #1f521f;
+      --font: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .scanlines {
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(51,255,0,0.015) 2px, rgba(51,255,0,0.015) 4px);
+      pointer-events: none; z-index: 100;
+    }
+
+    .noise {
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 99;
+    }
+
+    .glow { text-shadow: 0 0 6px rgba(51,255,0,0.5), 0 0 12px rgba(51,255,0,0.15); }
+    .glow-amber { text-shadow: 0 0 6px rgba(255,176,0,0.5), 0 0 12px rgba(255,176,0,0.15); }
+    .text-dim { color: var(--text-dim); }
+
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+    .cursor-blink { animation: blink 1s step-end infinite; }
+
+    @keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    .container {
+      max-width: 780px; margin: 0 auto; padding: 24px 20px 0;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── Lang Toggle ─── */
+    .lang-bar {
+      display: flex; gap: 4px; justify-content: flex-end;
+      margin-bottom: 16px; opacity: 0;
+      animation: reveal 0.4s ease 0.1s forwards;
+    }
+
+    .lang-btn {
+      font-family: var(--font); font-size: 11px; font-weight: 600;
+      padding: 4px 12px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim); cursor: pointer;
+      transition: all 0.2s ease; letter-spacing: 0.1em;
+    }
+
+    .lang-btn:hover { border-color: var(--fg); color: var(--text); }
+    .lang-btn.active { background: var(--fg); color: #000; border-color: var(--fg); }
+
+    /* ─── Terminal Prompt ─── */
+    .prompt-line {
+      display: flex; align-items: center; gap: 8px; font-size: 13px;
+      color: var(--text-dim); padding-bottom: 20px;
+      border-bottom: 1px solid var(--border); margin-bottom: 24px;
+    }
+    .prompt-line .user { color: var(--fg); }
+    .prompt-line .host { color: var(--amber); }
+    .prompt-line .prompt-char { color: var(--fg); font-weight: 700; }
+
+    /* ─── Banner Logo ─── */
+    .banner {
+      line-height: 1.35; color: var(--fg); white-space: pre;
+      margin-bottom: 28px; letter-spacing: 0; opacity: 0;
+      animation: reveal 0.6s ease 0.5s forwards;
+    }
+    .banner .title { color: var(--fg); font-weight: 700; }
+    .banner .subtitle { color: var(--amber); }
+
+    /* ─── Hero ─── */
+    .hero { margin-bottom: 40px; }
+    .hero .tagline { font-size: 14px; color: var(--text); margin-bottom: 6px; min-height: 1.6em; }
+    .hero .tagline .cursor {
+      display: inline-block; width: 8px; height: 1.1em;
+      background: var(--fg); vertical-align: text-bottom; margin-left: 2px;
+    }
+    .hero .sub {
+      font-size: 12px; color: var(--text-dim); margin-bottom: 28px;
+      opacity: 0; animation: reveal 0.6s ease 2.2s forwards;
+    }
+    .hero .quick-stats {
+      display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px;
+      color: var(--text-dim); margin-bottom: 28px;
+      opacity: 0; animation: reveal 0.6s ease 2.6s forwards;
+    }
+    .hero .quick-stats span { display: flex; align-items: center; gap: 4px; }
+    .hero .quick-stats .num { color: var(--fg); font-weight: 600; }
+
+    /* ─── CTA ─── */
+    .cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; font-family: var(--font);
+      font-size: 14px; font-weight: 700; color: #000;
+      background: var(--fg); padding: 14px 26px; border: none;
+      cursor: pointer; transition: all 0.2s ease;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      opacity: 0; animation: reveal 0.6s ease 3s forwards;
+    }
+    .cta:hover {
+      background: #000; color: var(--fg);
+      box-shadow: 0 0 24px rgba(51,255,0,0.3), inset 0 0 24px rgba(51,255,0,0.05);
+    }
+    .cta:active { transform: translateY(1px); }
+    .cta .arrow { font-size: 16px; line-height: 1; transition: transform 0.2s ease; }
+    .cta:hover .arrow { transform: translateX(4px); }
+    .cta .size-badge { font-size: 10px; font-weight: 400; opacity: 0.6; letter-spacing: 0; }
+
+    /* ─── Separator ─── */
+    .sep {
+      color: var(--fg-dim); font-size: 12px; letter-spacing: 0.1em;
+      text-align: center; margin: 40px 0; user-select: none;
+    }
+
+    /* ─── Pane ─── */
+    .pane { border: 1px solid var(--border); margin-bottom: 20px; opacity: 0; }
+    .pane.visible { animation: reveal 0.5s ease forwards; }
+    .pane .pane-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 14px; border-bottom: 1px solid var(--border);
+      background: rgba(51,255,0,0.02); font-size: 11px;
+      color: var(--fg-dim); letter-spacing: 0.12em; user-select: none;
+    }
+    .pane .pane-header .dots { display: flex; gap: 5px; }
+    .pane .pane-header .dot { width: 7px; height: 7px; border: 1px solid var(--fg-dim); }
+    .pane .pane-header .dot.r { border-color: var(--red); }
+    .pane .pane-header .dot.y { border-color: var(--amber); }
+    .pane .pane-header .dot.g { border-color: var(--fg); }
+    .pane .pane-body { padding: 14px; }
+
+    /* ─── Features Grid ─── */
+    .features-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+      background: var(--border);
+    }
+    .features-grid .feature {
+      background: var(--bg); padding: 14px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    .features-grid .feature .icon { color: var(--fg); font-size: 12px; flex-shrink: 0; margin-top: 2px; }
+    .features-grid .feature .text { font-size: 12px; line-height: 1.5; }
+    .features-grid .feature .text .label { color: var(--amber); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; font-size: 11px; }
+    .features-grid .feature .text .desc { color: var(--text-dim); margin-top: 2px; }
+    @media (max-width: 600px) { .features-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Stats ─── */
+    .stat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12px; }
+    .stat-row:last-child { margin-bottom: 0; }
+    .stat-row .stat-label { width: 90px; flex-shrink: 0; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+    .stat-row .stat-bar-track { flex: 1; height: 16px; background: rgba(51,255,0,0.05); border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .stat-row .stat-bar-fill { height: 100%; background: var(--fg); width: 0%; transition: width 1.2s cubic-bezier(0.16,1,0.3,1); display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; }
+    .stat-row .stat-bar-fill .pct { font-size: 9px; font-weight: 700; color: #000; line-height: 1; }
+    .stat-row .stat-bar-fill.amber { background: var(--amber); }
+
+    /* ─── Version Info ─── */
+    .version-info {
+      display: flex; gap: 20px; flex-wrap: wrap; font-size: 11px; color: var(--text-dim);
+    }
+    .version-info .info-item { display: flex; gap: 5px; }
+    .version-info .info-item .key { color: var(--text-dim); }
+    .version-info .info-item .val { color: var(--fg); font-weight: 600; }
+
+    /* ─── RTL ─── */
+    html[dir="rtl"] .lang-bar { justify-content: flex-start; }
+    html[dir="rtl"] .stat-row .stat-bar-fill { justify-content: flex-start; padding-left: 5px; padding-right: 0; left: auto; right: 0; }
+    html[dir="rtl"] .cta .arrow { display: inline-block; }
+    html[dir="rtl"] .cta:hover .arrow { transform: translateX(4px); }
+
+    /* ─── Footer ─── */
+    footer { padding: 28px 0 48px; text-align: center; font-size: 12px; color: var(--text-dim); }
+    footer .footer-sep { color: var(--fg-dim); font-size: 12px; letter-spacing: 0.1em; margin-bottom: 14px; user-select: none; }
+    footer .tg-link {
+      display: inline-flex; align-items: center; gap: 8px; color: var(--amber);
+      text-decoration: none; font-weight: 600; font-size: 13px;
+      padding: 8px 16px; border: 1px solid var(--amber);
+      transition: all 0.2s ease; margin-bottom: 14px;
+    }
+    footer .tg-link:hover { background: var(--amber); color: #000; }
+    footer .copy { font-size: 10px; letter-spacing: 0.05em; color: var(--fg-dim); }
+
+    @media (max-width: 480px) {
+      .container { padding: 16px 12px 0; }
+      .banner { font-size: 10px; }
+      .cta { width: 100%; justify-content: center; }
+      .prompt-line { font-size: 11px; flex-wrap: wrap; }
+      .stat-row .stat-label { width: 60px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="scanlines"></div>
+  <div class="noise"></div>
+
+  <main class="container">
+
+    <!-- ─── Language Toggle ─── -->
+    <div class="lang-bar">
+      <button class="lang-btn active" data-lang="en" aria-label="Switch language to English">EN</button>
+      <button class="lang-btn" data-lang="fr" aria-label="Switch language to French">FR</button>
+      <button class="lang-btn" data-lang="ar" aria-label="التبديل إلى اللغة العربية">AR</button>
+    </div>
+
+    <!-- ─── Terminal Prompt ─── -->
+    <div class="prompt-line" style="opacity:0;animation:reveal 0.4s ease 0.2s forwards;">
+      <span><span class="user">visitor</span><span class="text-dim">@</span><span class="host">mssougra</span><span class="text-dim">:</span><span class="path">~</span><span class="prompt-char">$</span></span>
+      <span class="text-dim" data-t="promptCmd">./welcome --greeting</span>
+      <span class="glow" style="font-size:10px;color:var(--fg);font-weight:600;" data-t="promptOk">[OK]</span>
+    </div>
+
+    <!-- ─── Banner Logo ─── -->
+    <div class="banner">
+╔══════════════════════════════════════╗
+║                                     ║
+║          <span class="title">M S S O U G R A</span>           ║
+║      <span class="subtitle">PREDICTIVE SPORTS ENGINE</span>     ║
+║                v1.0                 ║
+║                                     ║
+╚══════════════════════════════════════╝
+    </div>
+
+    <!-- ─── Hero ─── -->
+    <div class="hero">
+      <div class="tagline" id="tagline" aria-live="polite" role="status"></div>
+      <div class="sub">
+        <span class="text-dim"># </span>
+        <span data-t="subtitle">Powered by machine learning &amp; real-time match data.</span>
+        <span class="text-dim"> // No registration required.</span>
+      </div>
+      <div class="quick-stats">
+        <span><span class="text-dim">&gt;&gt;</span> <span data-t="versionLabel">VERSION</span> <span class="num">1.0.0</span></span>
+        <span><span class="text-dim">&gt;&gt;</span> <span data-t="sizeLabel">SIZE</span> <span class="num">63 MB</span></span>
+        <span><span class="text-dim">&gt;&gt;</span> <span data-t="platformLabel">PLATFORM</span> <span class="num">ANDROID 8+</span></span>
+        <span><span class="text-dim">&gt;&gt;</span> <span data-t="updatedLabel">UPDATED</span> <span class="num" id="updateDate"></span></span>
+      </div>
+      <a class="cta" href="./mssougra-v1.0.0.apk" download="mssougra-v1.0.0.apk">
+        <span class="arrow">↓</span>
+        <span data-t="downloadBtn">DOWNLOAD APK</span>
+        <span class="size-badge" data-t="sizeBadge">(63 MB)</span>
+      </a>
+    </div>
+
+    <!-- ─── Separator ─── -->
+    <div class="sep" style="opacity:0;animation:reveal 0.5s ease 3.4s forwards;">
+      ================<span class="glow" style="color:var(--fg);">[</span> <span data-t="featuresTitle">FEATURES</span> <span class="glow" style="color:var(--fg);">]</span>================
+    </div>
+
+    <!-- ─── Features Pane ─── -->
+    <div class="pane" id="featuresPane">
+      <div class="pane-header">
+        <span data-t="featuresPaneHeader">// system_capabilities --list</span>
+        <div class="dots">
+          <div class="dot r"></div>
+          <div class="dot y"></div>
+          <div class="dot g"></div>
+        </div>
+      </div>
+      <div class="pane-body" style="padding:0;">
+        <div class="features-grid" id="featuresGrid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Separator ─── -->
+    <div class="sep" style="opacity:0;animation:reveal 0.5s ease 3.6s forwards;">
+      ================<span class="glow" style="color:var(--fg);">[</span> <span data-t="performanceTitle">PERFORMANCE</span> <span class="glow" style="color:var(--fg);">]</span>===============
+    </div>
+
+    <!-- ─── Stats Pane ─── -->
+    <div class="pane" id="statsPane">
+      <div class="pane-header">
+        <span data-t="statsPaneHeader">// system_stats --metrics</span>
+        <div class="dots">
+          <div class="dot r"></div>
+          <div class="dot y"></div>
+          <div class="dot g"></div>
+        </div>
+      </div>
+      <div class="pane-body">
+        <div class="stat-row">
+          <div class="stat-label" data-t="statAccuracy">ACCURACY</div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill amber" data-width="78"><span class="pct">78%</span></div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label" data-t="statCoverage">COVERAGE</div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill" data-width="92"><span class="pct">92%</span></div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label" data-t="statUptime">UPTIME</div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill" data-width="99.9"><span class="pct">99.9%</span></div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label" data-t="statLeagues">LEAGUES</div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill amber" data-width="85"><span class="pct">85%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Version Info ─── -->
+    <div class="version-info" style="opacity:0;animation:reveal 0.5s ease 3.8s forwards;">
+      <div class="info-item"><span class="key" data-t="infoPkg">pkg:</span><span class="val">com.yassgr.mssougra</span></div>
+      <div class="info-item"><span class="key" data-t="infoBuild">build:</span><span class="val" id="buildDate">2026.06.07</span></div>
+      <div class="info-item"><span class="key" data-t="infoSdk">minSdk:</span><span class="val">26</span></div>
+      <div class="info-item"><span class="key" data-t="infoArch">arch:</span><span class="val">arm64-v8a / universal</span></div>
+    </div>
+
+    <!-- ─── Footer ─── -->
+    <footer>
+      <div class="footer-sep">
+        _______________________________<span class="glow" style="color:var(--fg);">[</span> <span data-t="contactTitle">CONTACT</span> <span class="glow" style="color:var(--fg);">]</span>_______________________________
+      </div>
+      <a class="tg-link" href="https://t.me/MssougraAdmin" target="_blank" rel="noopener">
+        <span>⟶</span>
+        @MssougraAdmin
+        <span class="cursor-blink" style="display:inline-block;width:2px;height:14px;background:var(--amber);"></span>
+      </a>
+      <div class="copy">
+        <span data-t="copyright">// MSSOUGRA PREDICTIVE ENGINE // ALL RIGHTS RESERVED // 2026</span>
+      </div>
+    </footer>
+
+  </main>
+
+  <script>
+    // ─── Translations ───
+    const langData = {
+      en: {
+        taglines: [
+          '> Advanced sports predictions, delivered.',
+          '> Machine learning. Real-time data. No BS.',
+        ],
+        promptCmd: './welcome --greeting',
+        promptOk: '[OK]',
+        subtitle: 'Powered by machine learning & real-time match data.',
+        versionLabel: 'VERSION',
+        sizeLabel: 'SIZE',
+        platformLabel: 'PLATFORM',
+        updatedLabel: 'UPDATED',
+        downloadBtn: 'DOWNLOAD APK',
+        sizeBadge: '(63 MB)',
+        featuresTitle: 'FEATURES',
+        featuresPaneHeader: '// system_capabilities --list',
+        features: [
+          { label: 'AI Predictions', desc: 'Daily picks with confidence scoring powered by trained ML models.' },
+          { label: 'Match Database', desc: 'Search & browse upcoming matches across multiple leagues.' },
+          { label: 'Deep Analysis', desc: 'H2H stats, form guides, xG data, and AI-written match insights.' },
+          { label: 'VIP Access', desc: 'Unlock premium picks & detailed breakdowns with a subscription.' },
+          { label: 'Offline Cache', desc: 'Daily data sync so picks are available even without connection.' },
+          { label: 'No Account', desc: 'Anonymous device-based sync. No email, no password needed.' },
+        ],
+        performanceTitle: 'PERFORMANCE',
+        statsPaneHeader: '// system_stats --metrics',
+        statAccuracy: 'ACCURACY',
+        statCoverage: 'COVERAGE',
+        statUptime: 'UPTIME',
+        statLeagues: 'LEAGUES',
+        infoPkg: 'pkg:',
+        infoBuild: 'build:',
+        infoSdk: 'minSdk:',
+        infoArch: 'arch:',
+        contactTitle: 'CONTACT',
+        copyright: '// MSSOUGRA PREDICTIVE ENGINE // ALL RIGHTS RESERVED // 2026',
+      },
+      fr: {
+        taglines: [
+          '> Pronostics sportifs avanc\xe9s, livr\xe9s.',
+          '> Machine learning. Donn\xe9es temps r\xe9el. Sans blabla.',
+        ],
+        promptCmd: './welcome --salutation',
+        promptOk: '[OK]',
+        subtitle: 'Propuls\xe9 par machine learning & donn\xe9es temps r\xe9el.',
+        versionLabel: 'VERSION',
+        sizeLabel: 'TAILLE',
+        platformLabel: 'PLATEFORME',
+        updatedLabel: 'MISE \xc0 JOUR',
+        downloadBtn: 'T\xc9L\xc9CHARGER L\'APK',
+        sizeBadge: '(63 Mo)',
+        featuresTitle: 'FONCTIONNALIT\xc9S',
+        featuresPaneHeader: '// capacit\xe9s_syst\xe8me --liste',
+        features: [
+          { label: 'IA Pronostics', desc: 'S\xe9lections quotidiennes avec score de confiance par mod\xe8les ML.' },
+          { label: 'Base Matchs', desc: 'Recherchez et parcourez les matchs \xe0 venir dans plusieurs ligues.' },
+          { label: 'Analyse Approfondie', desc: 'Stats H2H, formes, donn\xe9es xG, et analyses IA des matchs.' },
+          { label: 'Acc\xe8s VIP', desc: 'D\xe9bloquez les s\xe9lections premium avec un abonnement.' },
+          { label: 'Cache Hors-Ligne', desc: 'Synchronisation quotidienne pour des pronostics m\xeame sans connexion.' },
+          { label: 'Sans Compte', desc: 'Synchronisation anonyme bas\xe9e sur l\'appareil. Pas d\'email requis.' },
+        ],
+        performanceTitle: 'PERFORMANCE',
+        statsPaneHeader: '// statistiques_syst\xe8me --m\xe9triques',
+        statAccuracy: 'PR\xc9CISION',
+        statCoverage: 'COUVERTURE',
+        statUptime: 'DISPONIBILIT\xc9',
+        statLeagues: 'LIGUES',
+        infoPkg: 'paquet:',
+        infoBuild: 'build:',
+        infoSdk: 'sdkMin:',
+        infoArch: 'arch:',
+        contactTitle: 'CONTACT',
+        copyright: '// MSSOUGRA MOTEUR PR\xc9DICTIF // TOUS DROITS R\xc9SERV\xc9S // 2026',
+      },
+      ar: {
+        taglines: [
+          '\u203a \u062a\u0648\u0642\u0639\u0627\u062a \u0631\u064a\u0627\u0636\u064a\u0629 \u0645\u062a\u0642\u062f\u0651\u0645\u0629\u060c \u062a\u064f\u0633\u0644\u0651\u0645 \u0625\u0644\u064a\u0643.',
+          '\u203a \u062a\u0639\u0644\u0651\u064f\u0645 \u0622\u0644\u064a\u200e. \u0628\u064a\u0627\u0646\u0627\u062a \u0641\u0648\u0631\u064a\u0629\u200e. \u0628\u062f\u0648\u0646 \u0645\u0628\u0627\u0644\u063a\u0629\u200e.',
+        ],
+        promptCmd: '\u0645\u0631\u062d\u0628\u064b\u0627 \u2013\u062a\u0631\u062d\u064a\u0628',
+        promptOk: '[\u0639\u0645\u0644 \u0628\u0646\u062c\u0627\u062d]',
+        subtitle: '\u0645\u062f\u0639\u0648\u0645 \u0628\u0627\u0644\u062a\u0639\u0644\u0651\u064f\u0645 \u0627\u0644\u0622\u0644\u064a \u0648\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u064a\u0627\u062a \u0627\u0644\u0641\u0648\u0631\u064a\u0629\u200e.',
+        versionLabel: '\u0627\u0644\u0625\u0635\u062f\u0627\u0631',
+        sizeLabel: '\u0627\u0644\u062d\u062c\u0645',
+        platformLabel: '\u0627\u0644\u0645\u0646\u0635\u0629',
+        updatedLabel: '\u0622\u062e\u0631 \u062a\u062d\u062f\u064a\u062b',
+        downloadBtn: '\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u062a\u0637\u0628\u064a\u0642',
+        sizeBadge: '(\u0666\u0663 \u0645\u064a\u062c\u0627)',
+        featuresTitle: '\u0627\u0644\u0645\u064a\u0632\u0627\u062a',
+        featuresPaneHeader: '// \u0642\u062f\u0631\u0627\u062a_\u0627\u0644\u0646\u0638\u0627\u0645 --\u0627\u0644\u0642\u0627\u0626\u0645\u0629',
+        features: [
+          { label: '\u062a\u0648\u0642\u0639\u0627\u062a \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a', desc: '\u0627\u062e\u062a\u064a\u0627\u0631\u0627\u062a \u064a\u0648\u0645\u064a\u0629 \u0645\u0639 \u062a\u0642\u064a\u064a\u0645 \u062b\u0642\u0629 \u0645\u062f\u0639\u0648\u0645 \u0628\u0646\u0645\u0627\u0630\u062c \u062a\u0639\u0644\u0651\u064f\u0645 \u0622\u0644\u064a \u0645\u062f\u0631\u0651\u0628\u0629.' },
+          { label: '\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0645\u0628\u0627\u0631\u064a\u0627\u062a', desc: '\u0627\u0628\u062d\u062b \u0648\u062a\u0635\u0641\u0651\u062d \u0627\u0644\u0645\u0628\u0627\u0631\u064a\u0627\u062a \u0627\u0644\u0642\u0627\u062f\u0645\u0629 \u0639\u0628\u0631 \u062f\u0648\u0631\u064a\u0627\u062a \u0645\u062a\u0639\u062f\u0651\u062f\u0629.' },
+          { label: '\u062a\u062d\u0644\u064a\u0644 \u0645\u062a\u0639\u0645\u0642', desc: '\u0625\u062d\u0635\u0627\u0626\u064a\u0627\u062a \u0627\u0644\u0645\u0648\u0627\u062c\u0647\u0627\u062a\u060c \u0623\u062f\u0644\u0629 \u0627\u0644\u0623\u062f\u0627\u0621\u060c \u0628\u064a\u0627\u0646\u0627\u062a xG\u060c \u0648\u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a.' },
+          { label: '\u0648\u0635\u0648\u0644 VIP', desc: '\u0627\u0641\u062a\u062d \u0627\u0644\u0627\u062e\u062a\u064a\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u0645\u064a\u0651\u0632\u0629 \u0648\u0627\u0644\u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0627\u0644\u0645\u0641\u0635\u0651\u0644\u0629 \u0628\u0627\u0634\u062a\u0631\u0627\u0643.' },
+          { label: '\u062a\u062e\u0632\u064a\u0646 \u0645\u062d\u0644\u064a', desc: '\u0645\u0632\u0627\u0645\u0646\u0629 \u064a\u0648\u0645\u064a\u0629 \u0644\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0644\u062a\u0643\u0648\u0646 \u0627\u0644\u0627\u062e\u062a\u064a\u0627\u0631\u0627\u062a \u0645\u062a\u0627\u062d\u0629 \u062d\u062a\u0649 \u0628\u062f\u0648\u0646 \u0627\u062a\u0635\u0627\u0644.' },
+          { label: '\u0628\u062f\u0648\u0646 \u062d\u0633\u0627\u0628', desc: '\u0645\u0632\u0627\u0645\u0646\u0629 \u0645\u062c\u0647\u0648\u0644\u0629 \u062a\u0639\u062a\u0645\u062f \u0639\u0644\u0649 \u0627\u0644\u062c\u0647\u0627\u0632\u200e. \u0644\u0627 \u062d\u0627\u062c\u0629 \u0644\u0628\u0631\u064a\u062f \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0623\u0648 \u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631.' },
+        ],
+        performanceTitle: '\u0627\u0644\u0623\u062f\u0627\u0621',
+        statsPaneHeader: '// \u0625\u062d\u0635\u0627\u0626\u064a\u0627\u062a_\u0627\u0644\u0646\u0638\u0627\u0645 --\u0627\u0644\u0645\u0642\u0627\u064a\u064a\u0633',
+        statAccuracy: '\u0627\u0644\u062f\u0651\u0642\u0629',
+        statCoverage: '\u0627\u0644\u062a\u063a\u0637\u064a\u0629',
+        statUptime: '\u0627\u0644\u062a\u0648\u0627\u0641\u0631',
+        statLeagues: '\u0627\u0644\u062f\u0648\u0631\u064a\u0627\u062a',
+        infoPkg: '\u0627\u0644\u062d\u0632\u0645\u0629:',
+        infoBuild: '\u0627\u0644\u0628\u0646\u0627\u0621:',
+        infoSdk: '\u0623\u062f\u0646\u0649 SDK:',
+        infoArch: '\u0627\u0644\u0645\u0639\u0645\u0627\u0631\u064a\u0629:',
+        contactTitle: '\u0627\u0644\u0627\u062a\u0635\u0627\u0644',
+        copyright: '// \u0645\u062d\u0631\u0643 \u062a\u0648\u0642\u0639\u0627\u062a MSSOUGRA // \u062c\u0645\u064a\u0639 \u0627\u0644\u062d\u0642\u0648\u0642 \u0645\u062d\u0641\u0648\u0638\u0629 // \u0662\u0660\u0662\u0666',
+      },
+    };
+
+    // ─── State ───
+    let currentLang = 'en';
+
+    // ─── Build Features Grid ───
+    function buildFeatures(lang) {
+      const grid = document.getElementById('featuresGrid');
+      const features = langData[lang].features;
+      grid.innerHTML = '';
+      features.forEach((f, i) => {
+        const div = document.createElement('div');
+        div.className = 'feature';
+        const icon = document.createElement('div');
+        icon.className = 'icon';
+        icon.style.color = i % 2 === 0 ? 'var(--fg)' : 'var(--amber)';
+        icon.textContent = '\u25c8';
+        const text = document.createElement('div');
+        text.className = 'text';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = f.label;
+        const desc = document.createElement('div');
+        desc.className = 'desc';
+        desc.textContent = f.desc;
+        text.appendChild(label);
+        text.appendChild(desc);
+        div.appendChild(icon);
+        div.appendChild(text);
+        grid.appendChild(div);
+      });
+    }
+
+    // ─── Apply Translations ───
+    function applyTranslations(lang) {
+      const t = langData[lang];
+      document.querySelectorAll('[data-t]').forEach(el => {
+        const key = el.getAttribute('data-t');
+        if (t[key] !== undefined) el.textContent = t[key];
+      });
+    }
+
+    // ─── Switch Language ───
+    function switchLang(lang) {
+      if (lang === currentLang) return;
+      currentLang = lang;
+
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+      });
+
+      document.documentElement.lang = lang === 'ar' ? 'ar' : (lang === 'fr' ? 'fr' : 'en');
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+      applyTranslations(lang);
+      buildFeatures(lang);
+      restartTypewriter();
+    }
+
+    // ─── Language Button Events ───
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchLang(btn.getAttribute('data-lang')));
+    });
+
+    // ─── Typewriter ───
+    let twTimeout = null;
+    let twInitTimeout = null;
+
+    function restartTypewriter() {
+      if (twTimeout) { clearTimeout(twTimeout); twTimeout = null; }
+      if (twInitTimeout) { clearTimeout(twInitTimeout); twInitTimeout = null; }
+      const el = document.getElementById('tagline');
+      el.textContent = '';
+      startTypewriter();
+    }
+
+    function startTypewriter() {
+      const el = document.getElementById('tagline');
+      const lines = langData[currentLang].taglines;
+      let lineIdx = 0, charIdx = 0, deleting = false;
+
+      function tick() {
+        const current = lines[lineIdx % lines.length];
+        if (deleting) {
+          charIdx--;
+          el.innerHTML = current.substring(0, charIdx) + '<span class="cursor"></span>';
+          if (charIdx === 0) {
+            deleting = false;
+            lineIdx++;
+            twTimeout = setTimeout(tick, 400);
+            return;
+          }
+          twTimeout = setTimeout(tick, 25);
+        } else {
+          charIdx++;
+          el.innerHTML = current.substring(0, charIdx) + '<span class="cursor"></span>';
+          if (charIdx === current.length) {
+            deleting = true;
+            twTimeout = setTimeout(tick, 2500);
+            return;
+          }
+          twTimeout = setTimeout(tick, 45 + Math.random() * 25);
+        }
+      }
+      twInitTimeout = setTimeout(tick, 400);
+    }
+
+    // ─── Scroll Pane Reveal ───
+    (function revealOnScroll() {
+      const panes = document.querySelectorAll('.pane');
+      let revealed = new Array(panes.length).fill(false);
+      function check() {
+        let allDone = true;
+        panes.forEach((pane, i) => {
+          if (revealed[i]) return;
+          if (pane.getBoundingClientRect().top < window.innerHeight - 40) {
+            revealed[i] = true;
+            pane.classList.add('visible');
+            pane.style.animationDelay = (i * 0.15) + 's';
+          } else {
+            allDone = false;
+          }
+        });
+        if (allDone) window.removeEventListener('scroll', check);
+      }
+      setTimeout(check, 400);
+      window.addEventListener('scroll', check);
+    })();
+
+    // ─── Progress Bars ───
+    (function animateBars() {
+      const pane = document.getElementById('statsPane');
+      if (!pane) return;
+      let done = false;
+      function check() {
+        if (done) return;
+        if (pane.getBoundingClientRect().top < window.innerHeight - 20) {
+          done = true;
+          window.removeEventListener('scroll', check);
+          document.querySelectorAll('.stat-bar-fill').forEach(bar => {
+            setTimeout(() => { bar.style.width = bar.getAttribute('data-width') + '%'; }, 200);
+          });
+        }
+      }
+      setTimeout(check, 600);
+      window.addEventListener('scroll', check);
+    })();
+
+    // ─── Init ───
+    buildFeatures('en');
+    applyTranslations('en');
+    startTypewriter();
+  </script>
+
+</body>
+</html>
