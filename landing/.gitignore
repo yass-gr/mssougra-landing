@@ -1,3 +1,0 @@
-# APK is tracked intentionally for distribution
-# Rebuild with: cd ../web-app-to-react-native && npx expo run:android
-node_modules
